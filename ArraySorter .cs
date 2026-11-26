@@ -1,108 +1,129 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 
 namespace Latypova_Alina_BAI_24_LR4
 {
     public class ArraySorter
     {
-        // Общий счётчик сравнений (разделяемый ресурс)
+        // Общий счётчик сравнений для всех потоков
         private long _totalComparisons;
         private readonly object _locker = new object();
 
-        // Делегаты и события для уведомления о завершении сортировки
         public delegate void SortCompletedHandler(int[] sortedArray, long comparisons, double elapsedMilliseconds);
         public event SortCompletedHandler BubbleSortCompleted;
         public event SortCompletedHandler QuickSortCompleted;
         public event SortCompletedHandler InsertionSortCompleted;
         public event SortCompletedHandler ShakerSortCompleted;
 
-        // Свойство для доступа к общему счётчику
         public long TotalComparisons => _totalComparisons;
 
-        // Генерация случайного массива заданного размера
+        // Генерация случайного массива
         public int[] GenerateRandomArray(int size)
         {
             Random rand = new Random();
             int[] array = new int[size];
-            for (int i = 0; i < size; i++)
-                array[i] = rand.Next(1000);
+            for (int i = 0; i < size; i++) array[i] = rand.Next(1000);
             return array;
         }
 
-        // Метод для пузырьковой сортировки
-        public void BubbleSort(int[] originalArray, Action<double> progressCallback)
+        // Копирование массива для безопасной параллельной работы
+        private int[] CopyArray(int[] source)
         {
+            int[] copy = new int[source.Length];
+            Array.Copy(source, copy, source.Length);
+            return copy;
+        }
+
+        // Пузырьковая сортировка
+        public void BubbleSort(int[] originalArray, Action<double> progressCallback, CancellationToken token, bool shared)
+        {
+            // Если выбран общий массив, берем его, иначе делаем копию
+            int[] array = shared ? originalArray : CopyArray(originalArray);
             long comparisons = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            // Весь процесс сортировки заблокирован, так как работаем с общим массивом
-            lock (_locker)
+            // Если массив общий, блокируем его на время сортировки
+            if (shared)
             {
-                for (int i = 0; i < originalArray.Length - 1; i++)
-                {
-                    for (int j = 0; j < originalArray.Length - 1 - i; j++)
-                    {
-                        comparisons++;
-                        if (originalArray[j] > originalArray[j + 1])
-                        {
-                            int temp = originalArray[j];
-                            originalArray[j] = originalArray[j + 1];
-                            originalArray[j + 1] = temp;
-                        }
-                    }
+                lock (_locker) { ExecuteBubbleSort(array, progressCallback, token, ref comparisons); }
+            }
+            else
+            {
+                ExecuteBubbleSort(array, progressCallback, token, ref comparisons);
+            }
 
-                    // Обновление прогресса
-                    if (i % (originalArray.Length / 10 + 1) == 0 && progressCallback != null)
+            watch.Stop();
+            if (token.IsCancellationRequested) return;
+
+            progressCallback?.Invoke(100);
+            lock (_locker) { _totalComparisons += comparisons; }
+            BubbleSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
+        }
+
+        // Вспомогательный метод для пузырьковой сортировки
+        private void ExecuteBubbleSort(int[] array, Action<double> progressCallback, CancellationToken token, ref long comparisons)
+        {
+            for (int i = 0; i < array.Length - 1; i++)
+            {
+                if (token.IsCancellationRequested) return;
+                for (int j = 0; j < array.Length - 1 - i; j++)
+                {
+                    comparisons++;
+                    if (array[j] > array[j + 1])
                     {
-                        progressCallback((double)i / (originalArray.Length - 1) * 100);
+                        int temp = array[j];
+                        array[j] = array[j + 1];
+                        array[j + 1] = temp;
                     }
                 }
+                // Обновление прогресс-бара
+                if (i % (array.Length / 10 + 1) == 0 && progressCallback != null)
+                    progressCallback((double)i / (array.Length - 1) * 100);
             }
-
-            watch.Stop();
-            progressCallback?.Invoke(100);
-            _totalComparisons += comparisons;
-            BubbleSortCompleted?.Invoke(originalArray, comparisons, watch.Elapsed.TotalMilliseconds);
         }
 
-        // Метод для быстрой сортировки
-        public void QuickSort(int[] originalArray, Action<double> progressCallback)
+        // Быстрая сортировка
+        public void QuickSort(int[] originalArray, Action<double> progressCallback, CancellationToken token, bool shared)
         {
+            int[] array = shared ? originalArray : CopyArray(originalArray);
             long comparisons = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            lock (_locker)
+            if (shared)
             {
-                QuickSortRecursive(originalArray, 0, originalArray.Length - 1, ref comparisons, progressCallback);
+                lock (_locker) { QuickSortRecursive(array, 0, array.Length - 1, ref comparisons, progressCallback, token); }
+            }
+            else
+            {
+                QuickSortRecursive(array, 0, array.Length - 1, ref comparisons, progressCallback, token);
             }
 
             watch.Stop();
+            if (token.IsCancellationRequested) return;
+
             progressCallback?.Invoke(100);
-            _totalComparisons += comparisons;
-            QuickSortCompleted?.Invoke(originalArray, comparisons, watch.Elapsed.TotalMilliseconds);
+            lock (_locker) { _totalComparisons += comparisons; }
+            QuickSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
         }
 
-        private void QuickSortRecursive(int[] arr, int left, int right, ref long comparisons, Action<double> progressCallback)
+        // Рекурсивная часть быстрой сортировки
+        private void QuickSortRecursive(int[] arr, int left, int right, ref long comparisons, Action<double> progressCallback, CancellationToken token)
         {
+            if (token.IsCancellationRequested) return;
             if (left < right)
             {
                 int pivotIndex = Partition(arr, left, right, ref comparisons);
-
-                // Обновление прогресса (приблизительно)
                 if (progressCallback != null)
                 {
                     double progress = (double)(arr.Length - (right - left)) / arr.Length * 100;
                     progressCallback(progress);
                 }
-
-                QuickSortRecursive(arr, left, pivotIndex - 1, ref comparisons, progressCallback);
-                QuickSortRecursive(arr, pivotIndex + 1, right, ref comparisons, progressCallback);
+                QuickSortRecursive(arr, left, pivotIndex - 1, ref comparisons, progressCallback, token);
+                QuickSortRecursive(arr, pivotIndex + 1, right, ref comparisons, progressCallback, token);
             }
         }
 
+        // Разделение массива для быстрой сортировки
         private int Partition(int[] arr, int left, int right, ref long comparisons)
         {
             int pivot = arr[right];
@@ -124,94 +145,110 @@ namespace Latypova_Alina_BAI_24_LR4
             return i + 1;
         }
 
-        // Метод для сортировки вставками
-        public void InsertionSort(int[] originalArray, Action<double> progressCallback)
+        // Сортировка вставками
+        public void InsertionSort(int[] originalArray, Action<double> progressCallback, CancellationToken token, bool shared)
         {
+            int[] array = shared ? originalArray : CopyArray(originalArray);
             long comparisons = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            lock (_locker)
+            if (shared)
             {
-                for (int i = 1; i < originalArray.Length; i++)
-                {
-                    int key = originalArray[i];
-                    int j = i - 1;
-                    while (j >= 0 && originalArray[j] > key)
-                    {
-                        comparisons++;
-                        originalArray[j + 1] = originalArray[j];
-                        j--;
-                    }
-                    comparisons++;
-                    originalArray[j + 1] = key;
-
-                    // Обновление прогресса
-                    if (i % (originalArray.Length / 10 + 1) == 0 && progressCallback != null)
-                    {
-                        progressCallback((double)i / originalArray.Length * 100);
-                    }
-                }
+                lock (_locker) { ExecuteInsertionSort(array, progressCallback, token, ref comparisons); }
+            }
+            else
+            {
+                ExecuteInsertionSort(array, progressCallback, token, ref comparisons);
             }
 
             watch.Stop();
+            if (token.IsCancellationRequested) return;
+
             progressCallback?.Invoke(100);
-            _totalComparisons += comparisons;
-            InsertionSortCompleted?.Invoke(originalArray, comparisons, watch.Elapsed.TotalMilliseconds);
+            lock (_locker) { _totalComparisons += comparisons; }
+            InsertionSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
         }
 
-        // Метод для шейкерной сортировки
-        public void ShakerSort(int[] originalArray, Action<double> progressCallback)
+        // Вспомогательный метод для сортировки вставками
+        private void ExecuteInsertionSort(int[] array, Action<double> progressCallback, CancellationToken token, ref long comparisons)
         {
+            for (int i = 1; i < array.Length; i++)
+            {
+                if (token.IsCancellationRequested) return;
+                int key = array[i];
+                int j = i - 1;
+                while (j >= 0 && array[j] > key)
+                {
+                    comparisons++;
+                    array[j + 1] = array[j];
+                    j--;
+                }
+                comparisons++;
+                array[j + 1] = key;
+                if (i % (array.Length / 10 + 1) == 0 && progressCallback != null)
+                    progressCallback((double)i / array.Length * 100);
+            }
+        }
+
+        // Шейкерная сортировка
+        public void ShakerSort(int[] originalArray, Action<double> progressCallback, CancellationToken token, bool shared)
+        {
+            int[] array = shared ? originalArray : CopyArray(originalArray);
             long comparisons = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            lock (_locker)
+            if (shared)
             {
-                int left = 0;
-                int right = originalArray.Length - 1;
-
-                while (left < right)
-                {
-                    // Проход слева направо
-                    for (int i = left; i < right; i++)
-                    {
-                        comparisons++;
-                        if (originalArray[i] > originalArray[i + 1])
-                        {
-                            int temp = originalArray[i];
-                            originalArray[i] = originalArray[i + 1];
-                            originalArray[i + 1] = temp;
-                        }
-                    }
-
-                    right--;
-
-                    // Проход справа налево
-                    for (int i = right; i > left; i--)
-                    {
-                        comparisons++;
-                        if (originalArray[i - 1] > originalArray[i])
-                        {
-                            int temp = originalArray[i - 1];
-                            originalArray[i - 1] = originalArray[i];
-                            originalArray[i] = temp;
-                        }
-                    }
-
-                    left++;
-
-                    // Обновление прогресса
-                    if (left % (originalArray.Length / 10 + 1) == 0 && progressCallback != null)
-                    {
-                        progressCallback((double)left / originalArray.Length * 100);
-                    }
-                }
+                lock (_locker) { ExecuteShakerSort(array, progressCallback, token, ref comparisons); }
+            }
+            else
+            {
+                ExecuteShakerSort(array, progressCallback, token, ref comparisons);
             }
 
             watch.Stop();
+            if (token.IsCancellationRequested) return;
+
             progressCallback?.Invoke(100);
-            _totalComparisons += comparisons;
-            ShakerSortCompleted?.Invoke(originalArray, comparisons, watch.Elapsed.TotalMilliseconds);
+            lock (_locker) { _totalComparisons += comparisons; }
+            ShakerSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
+        }
+
+        // Вспомогательный метод для шейкерной сортировки
+        private void ExecuteShakerSort(int[] array, Action<double> progressCallback, CancellationToken token, ref long comparisons)
+        {
+            int left = 0;
+            int right = array.Length - 1;
+            while (left < right)
+            {
+                if (token.IsCancellationRequested) return;
+                // Проход слева направо
+                for (int i = left; i < right; i++)
+                {
+                    comparisons++;
+                    if (array[i] > array[i + 1])
+                    {
+                        int temp = array[i];
+                        array[i] = array[i + 1];
+                        array[i + 1] = temp;
+                    }
+                }
+                right--;
+                // Проход справа налево
+                for (int i = right; i > left; i--)
+                {
+                    comparisons++;
+                    if (array[i - 1] > array[i])
+                    {
+                        int temp = array[i - 1];
+                        array[i - 1] = array[i];
+                        array[i] = temp;
+                    }
+                }
+                left++;
+                if (left % (array.Length / 10 + 1) == 0 && progressCallback != null)
+                    progressCallback((double)left / array.Length * 100);
+            }
         }
     }
 }

@@ -16,7 +16,6 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Ввод размера и количества потоков -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="Размер массива:" VerticalAlignment="Center" Margin="0,0,10,0"/>
             <TextBox Text="{Binding ArraySize, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="0,0,15,0" VerticalContentAlignment="Center"/>
@@ -29,18 +28,19 @@
                 <ComboBoxItem Content="4"/>
             </ComboBox>
 
+            <CheckBox Content="Общий массив" IsChecked="{Binding UseSharedArray}" VerticalAlignment="Center" Margin="0,0,15,0"/>
+
             <Button Content="Сгенерировать" Command="{Binding GenerateArrayCommand}" Width="120" Padding="5"/>
         </StackPanel>
 
-        <!-- Отображение исходного массива -->
         <TextBlock Grid.Row="1" Text="{Binding OriginalArrayString}" TextWrapping="Wrap" Margin="0,0,0,15" FontStyle="Italic"/>
 
-        <!-- Кнопки запуска сортировок -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,15">
             <Button Content="Пузырьковая" Command="{Binding BubbleSortCommand}" Width="110" Padding="5" Margin="0,0,10,0"/>
             <Button Content="Быстрая" Command="{Binding QuickSortCommand}" Width="110" Padding="5" Margin="0,0,10,0"/>
             <Button Content="Вставками" Command="{Binding InsertionSortCommand}" Width="110" Padding="5" Margin="0,0,10,0"/>
-            <Button Content="Шейкерная" Command="{Binding ShakerSortCommand}" Width="110" Padding="5"/>
+            <Button Content="Шейкерная" Command="{Binding ShakerSortCommand}" Width="110" Padding="5" Margin="0,0,10,0"/>
+            <Button Content="Прервать все" Command="{Binding CancelAllCommand}" Width="110" Padding="5" Margin="10,0,0,0" />
         </StackPanel>
 
         <StackPanel Grid.Row="3" Margin="0,0,0,10">
@@ -63,7 +63,6 @@
             <ProgressBar Value="{Binding ShakerProgress}" Height="15" Maximum="100" Foreground="#E91E63"/>
         </StackPanel>
 
-        <!-- Итоги -->
         <TextBlock Grid.Row="7" Text="{Binding TotalComparisons}" FontWeight="Bold" FontSize="14" Margin="0,0,0,5"/>
         <TextBlock Grid.Row="8" Text="{Binding TotalElapsedTime}" FontWeight="Bold" FontSize="14" Foreground="DarkBlue"/>
     </Grid>

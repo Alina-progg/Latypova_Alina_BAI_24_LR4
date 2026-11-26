@@ -18,6 +18,9 @@ namespace Latypova_Alina_BAI_24_LR4
         private SemaphoreSlim _semaphore;
         private Stopwatch _batchStopwatch = new Stopwatch();
 
+        // Токен для прерывания потоков
+        private CancellationTokenSource _cts;
+
         // Счетчики для отслеживания завершения всех запущенных сортировок
         private int _expectedSortsToComplete = 0;
         private int _completedSorts = 0;
@@ -53,6 +56,10 @@ namespace Latypova_Alina_BAI_24_LR4
         [ObservableProperty]
         private string _shakerSortResult;
 
+        // Флаг для переключения между общим массивом и копиями
+        [ObservableProperty]
+        private bool _useSharedArray = false;
+
         // Свойства для работы ProgressBar
         [ObservableProperty] private double _bubbleProgress;
         [ObservableProperty] private double _quickProgress;
@@ -63,6 +70,7 @@ namespace Latypova_Alina_BAI_24_LR4
         {
             _sorter = new ArraySorter();
             _semaphore = new SemaphoreSlim(ThreadCount);
+            _cts = new CancellationTokenSource();
 
             // Получаем контекст синхронизации текущего потока (UI-потока), 
             // чтобы потом безопасно обновлять интерфейс из фоновых потоков.
@@ -97,6 +105,10 @@ namespace Latypova_Alina_BAI_24_LR4
             // Сбрасываем прогресс-бары при генерации нового массива
             BubbleProgress = QuickProgress = InsertionProgress = ShakerProgress = 0;
 
+            // Пересоздаем токен отмены для новой партии сортировок
+            _cts?.Dispose();
+            _cts = new CancellationTokenSource();
+
             // Обновляем состояние команд сортировок
             BubbleSortCommand.NotifyCanExecuteChanged();
             QuickSortCommand.NotifyCanExecuteChanged();
@@ -129,7 +141,7 @@ namespace Latypova_Alina_BAI_24_LR4
             BubbleProgress = 0;
             BubbleSortCommand.NotifyCanExecuteChanged();
 
-            StartSort(() => _sorter.BubbleSort(_originalArray, p => UpdateProgress(() => BubbleProgress = p)));
+            StartSort(() => _sorter.BubbleSort(_originalArray, p => UpdateProgress(() => BubbleProgress = p), _cts.Token, UseSharedArray));
         }
 
         // Быстрая сортировка
@@ -142,7 +154,7 @@ namespace Latypova_Alina_BAI_24_LR4
             QuickProgress = 0;
             QuickSortCommand.NotifyCanExecuteChanged();
 
-            StartSort(() => _sorter.QuickSort(_originalArray, p => UpdateProgress(() => QuickProgress = p)));
+            StartSort(() => _sorter.QuickSort(_originalArray, p => UpdateProgress(() => QuickProgress = p), _cts.Token, UseSharedArray));
         }
 
         // Сортировка вставками
@@ -155,7 +167,7 @@ namespace Latypova_Alina_BAI_24_LR4
             InsertionProgress = 0;
             InsertionSortCommand.NotifyCanExecuteChanged();
 
-            StartSort(() => _sorter.InsertionSort(_originalArray, p => UpdateProgress(() => InsertionProgress = p)));
+            StartSort(() => _sorter.InsertionSort(_originalArray, p => UpdateProgress(() => InsertionProgress = p), _cts.Token, UseSharedArray));
         }
 
         // Шейкерная сортировка
@@ -168,7 +180,14 @@ namespace Latypova_Alina_BAI_24_LR4
             ShakerProgress = 0;
             ShakerSortCommand.NotifyCanExecuteChanged();
 
-            StartSort(() => _sorter.ShakerSort(_originalArray, p => UpdateProgress(() => ShakerProgress = p)));
+            StartSort(() => _sorter.ShakerSort(_originalArray, p => UpdateProgress(() => ShakerProgress = p), _cts.Token, UseSharedArray));
+        }
+
+        // Команда для кнопки Прервать все
+        [RelayCommand]
+        private void CancelAll()
+        {
+            _cts?.Cancel();
         }
 
         // Обработчики событий (вызываются из фоновых потоков)
