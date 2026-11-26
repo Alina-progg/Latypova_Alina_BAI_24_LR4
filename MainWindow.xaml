@@ -5,8 +5,42 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Latypova_Alina_BAI_24_LR4"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="Сравнение алгоритмов сортировки" Height="500" Width="800">
 
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Ввод размера и кнопка генерации -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="Размер массива:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBox Text="{Binding ArraySize, UpdateSourceTrigger=PropertyChanged}" Width="100" Margin="0,0,10,0" VerticalContentAlignment="Center"/>
+            <Button Content="Сгенерировать" Command="{Binding GenerateArrayCommand}" Width="120" Padding="5"/>
+        </StackPanel>
+
+        <!-- Отображение исходного массива -->
+        <TextBlock Grid.Row="1" Text="{Binding OriginalArrayString}" TextWrapping="Wrap" Margin="0,0,0,15" FontStyle="Italic"/>
+
+        <!-- Кнопки запуска сортировок -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,15">
+            <Button Content="Пузырьковая" Command="{Binding BubbleSortCommand}" Width="120" Padding="5" Margin="0,0,10,0"/>
+            <Button Content="Быстрая" Command="{Binding QuickSortCommand}" Width="120" Padding="5" Margin="0,0,10,0"/>
+            <Button Content="Вставками" Command="{Binding InsertionSortCommand}" Width="120" Padding="5"/>
+        </StackPanel>
+
+        <!-- Результаты сортировок -->
+        <TextBlock Grid.Row="3" Text="{Binding BubbleSortResult}" TextWrapping="Wrap" Margin="0,0,0,5"/>
+        <TextBlock Grid.Row="4" Text="{Binding QuickSortResult}" TextWrapping="Wrap" Margin="0,0,0,5"/>
+        <TextBlock Grid.Row="5" Text="{Binding InsertionSortResult}" TextWrapping="Wrap" Margin="0,0,0,15"/>
+
+        <!-- Общее число сравнений -->
+        <TextBlock Grid.Row="6" Text="{Binding TotalComparisons}" FontWeight="Bold" FontSize="14"/>
     </Grid>
 </Window>
