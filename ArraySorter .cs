@@ -17,6 +17,7 @@ namespace Latypova_Alina_BAI_24_LR4
         public event SortCompletedHandler BubbleSortCompleted;
         public event SortCompletedHandler QuickSortCompleted;
         public event SortCompletedHandler InsertionSortCompleted;
+        public event SortCompletedHandler ShakerSortCompleted;
 
         // Свойство для доступа к общему счётчику
         public long TotalComparisons => _totalComparisons;
@@ -145,5 +146,62 @@ namespace Latypova_Alina_BAI_24_LR4
             InsertionSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
         }
 
-    } 
+
+
+        // Метод для шейкерной сортировки
+        public void ShakerSort(int[] originalArray)
+        {
+            int[] array = CopyArray(originalArray);
+            long comparisons = 0;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+
+            int left = 0;
+            int right = array.Length - 1;
+
+            while (left < right)
+            {
+                // Проход слева направо
+                for (int i = left; i < right; i++)
+                {
+                    comparisons++;
+
+                    if (array[i] > array[i + 1])
+                    {
+                        int temp = array[i];
+                        array[i] = array[i + 1];
+                        array[i + 1] = temp;
+                    }
+                }
+
+                right--;
+
+                // Проход справа налево
+                for (int i = right; i > left; i--)
+                {
+                    comparisons++;
+
+                    if (array[i - 1] > array[i])
+                    {
+                        int temp = array[i - 1];
+                        array[i - 1] = array[i];
+                        array[i] = temp;
+                    }
+                }
+
+                left++;
+            }
+
+            watch.Stop();
+
+            lock (_locker)
+            {
+                _totalComparisons += comparisons;
+            }
+
+            ShakerSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
+        }
+
+
+
+    }
 } 

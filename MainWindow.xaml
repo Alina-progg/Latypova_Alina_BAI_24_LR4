@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Ввод размера и кнопка генерации -->
@@ -32,15 +33,17 @@
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,15">
             <Button Content="Пузырьковая" Command="{Binding BubbleSortCommand}" Width="120" Padding="5" Margin="0,0,10,0"/>
             <Button Content="Быстрая" Command="{Binding QuickSortCommand}" Width="120" Padding="5" Margin="0,0,10,0"/>
-            <Button Content="Вставками" Command="{Binding InsertionSortCommand}" Width="120" Padding="5"/>
+            <Button Content="Вставками" Command="{Binding InsertionSortCommand}" Width="120" Padding="5" Margin="0,0,10,0"/>
+            <Button Content="Шейкерная" Command="{Binding ShakerSortCommand}" Width="120" Padding="5"/>
         </StackPanel>
 
         <!-- Результаты сортировок -->
         <TextBlock Grid.Row="3" Text="{Binding BubbleSortResult}" TextWrapping="Wrap" Margin="0,0,0,5"/>
         <TextBlock Grid.Row="4" Text="{Binding QuickSortResult}" TextWrapping="Wrap" Margin="0,0,0,5"/>
         <TextBlock Grid.Row="5" Text="{Binding InsertionSortResult}" TextWrapping="Wrap" Margin="0,0,0,15"/>
+        <TextBlock Grid.Row="6" Text="{Binding ShakerSortResult}" TextWrapping="Wrap" Margin="0,0,0,15"/>
 
         <!-- Общее число сравнений -->
-        <TextBlock Grid.Row="6" Text="{Binding TotalComparisons}" FontWeight="Bold" FontSize="14"/>
+        <TextBlock Grid.Row="7" Text="{Binding TotalComparisons}" FontWeight="Bold" FontSize="14"/>
     </Grid>
 </Window>

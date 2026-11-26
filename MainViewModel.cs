@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace Latypova_Alina_BAI_24_LR4
 {
@@ -36,6 +37,9 @@ namespace Latypova_Alina_BAI_24_LR4
         [ObservableProperty]
         private bool _canGenerate = true;
 
+        [ObservableProperty]
+        private string _shakerSortResult;
+
         public MainViewModel()
         {
             _sorter = new ArraySorter();
@@ -48,6 +52,7 @@ namespace Latypova_Alina_BAI_24_LR4
             _sorter.BubbleSortCompleted += OnBubbleSortCompleted;
             _sorter.QuickSortCompleted += OnQuickSortCompleted;
             _sorter.InsertionSortCompleted += OnInsertionSortCompleted;
+            _sorter.ShakerSortCompleted += OnShakerSortCompleted;
         }
 
         // Команда генерации массива
@@ -60,13 +65,14 @@ namespace Latypova_Alina_BAI_24_LR4
             OriginalArrayString = "Исходный массив: " + string.Join(", ", _originalArray.Take(20)) + (ArraySize > 20 ? "..." : "");
 
             // Сбрасываем предыдущие результаты
-            BubbleSortResult = QuickSortResult = InsertionSortResult = null;
+            BubbleSortResult = QuickSortResult = InsertionSortResult = ShakerSortResult = null;
             TotalComparisons = "Общее число сравнений: 0";
 
             // Обновляем состояние команд сортировок
             BubbleSortCommand.NotifyCanExecuteChanged();
             QuickSortCommand.NotifyCanExecuteChanged();
             InsertionSortCommand.NotifyCanExecuteChanged();
+            ShakerSortCommand.NotifyCanExecuteChanged();
         }
 
         private bool CanGenerateArray() => CanGenerate;
@@ -143,6 +149,16 @@ namespace Latypova_Alina_BAI_24_LR4
             }, null);
         }
 
+        private void OnShakerSortCompleted(int[] sortedArray, long comparisons, double elapsedMs)
+        {
+            _uiContext.Post(_ =>
+            {
+                ShakerSortResult = $"Шейкерная: {FormatArray(sortedArray)}, время: {elapsedMs:F2} мс, сравнений: {comparisons}";
+                UpdateTotalComparisons();
+                ShakerSortCommand.NotifyCanExecuteChanged();
+            }, null);
+        }
+
         private void UpdateTotalComparisons()
         {
             TotalComparisons = $"Общее число сравнений: {_sorter.TotalComparisons}";
@@ -155,5 +171,20 @@ namespace Latypova_Alina_BAI_24_LR4
             else
                 return string.Join(", ", arr.Take(5)) + "...";
         }
+
+
+        // Шейкерная сортировка
+        private bool CanSortShaker() => _originalArray != null && ShakerSortResult != "Сортируется...";
+
+        [RelayCommand(CanExecute = nameof(CanSortShaker))]
+        private void ShakerSort()
+        {
+            ShakerSortResult = "Сортируется...";
+            ShakerSortCommand.NotifyCanExecuteChanged();
+
+            Thread thread = new Thread(() => _sorter.ShakerSort(_originalArray));
+            thread.Start();
+        }
+
     }
 }
