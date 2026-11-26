@@ -138,7 +138,7 @@ namespace Latypova_Alina_BAI_24_LR4
             }
 
             watch.Stop();
-            //lock (_locker)
+            lock (_locker)
             {
                 _totalComparisons += comparisons;
             }
