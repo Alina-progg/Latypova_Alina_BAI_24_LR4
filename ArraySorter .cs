@@ -32,66 +32,57 @@ namespace Latypova_Alina_BAI_24_LR4
             return array;
         }
 
-        // Копирование массива (чтобы каждый поток работал со своей копией)
-        private int[] CopyArray(int[] source)
-        {
-            int[] copy = new int[source.Length];
-            Array.Copy(source, copy, source.Length);
-            return copy;
-        }
-
         // Метод для пузырьковой сортировки
         public void BubbleSort(int[] originalArray, Action<double> progressCallback)
         {
-            int[] array = CopyArray(originalArray);
             long comparisons = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            for (int i = 0; i < array.Length - 1; i++)
+            // Весь процесс сортировки заблокирован, так как работаем с общим массивом
+            lock (_locker)
             {
-                for (int j = 0; j < array.Length - 1 - i; j++)
+                for (int i = 0; i < originalArray.Length - 1; i++)
                 {
-                    comparisons++;
-                    if (array[j] > array[j + 1])
+                    for (int j = 0; j < originalArray.Length - 1 - i; j++)
                     {
-                        int temp = array[j];
-                        array[j] = array[j + 1];
-                        array[j + 1] = temp;
+                        comparisons++;
+                        if (originalArray[j] > originalArray[j + 1])
+                        {
+                            int temp = originalArray[j];
+                            originalArray[j] = originalArray[j + 1];
+                            originalArray[j + 1] = temp;
+                        }
                     }
-                }
 
-                // Обновление прогресса
-                if (i % (array.Length / 10 + 1) == 0 && progressCallback != null)
-                {
-                    progressCallback((double)i / (array.Length - 1) * 100);
+                    // Обновление прогресса
+                    if (i % (originalArray.Length / 10 + 1) == 0 && progressCallback != null)
+                    {
+                        progressCallback((double)i / (originalArray.Length - 1) * 100);
+                    }
                 }
             }
 
             watch.Stop();
             progressCallback?.Invoke(100);
-            lock (_locker)
-            {
-                _totalComparisons += comparisons;
-            }
-            BubbleSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
+            _totalComparisons += comparisons;
+            BubbleSortCompleted?.Invoke(originalArray, comparisons, watch.Elapsed.TotalMilliseconds);
         }
 
         // Метод для быстрой сортировки
         public void QuickSort(int[] originalArray, Action<double> progressCallback)
         {
-            int[] array = CopyArray(originalArray);
             long comparisons = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            QuickSortRecursive(array, 0, array.Length - 1, ref comparisons, progressCallback);
+            lock (_locker)
+            {
+                QuickSortRecursive(originalArray, 0, originalArray.Length - 1, ref comparisons, progressCallback);
+            }
 
             watch.Stop();
             progressCallback?.Invoke(100);
-            lock (_locker)
-            {
-                _totalComparisons += comparisons;
-            }
-            QuickSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
+            _totalComparisons += comparisons;
+            QuickSortCompleted?.Invoke(originalArray, comparisons, watch.Elapsed.TotalMilliseconds);
         }
 
         private void QuickSortRecursive(int[] arr, int left, int right, ref long comparisons, Action<double> progressCallback)
@@ -136,93 +127,91 @@ namespace Latypova_Alina_BAI_24_LR4
         // Метод для сортировки вставками
         public void InsertionSort(int[] originalArray, Action<double> progressCallback)
         {
-            int[] array = CopyArray(originalArray);
             long comparisons = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            for (int i = 1; i < array.Length; i++)
+            lock (_locker)
             {
-                int key = array[i];
-                int j = i - 1;
-                while (j >= 0 && array[j] > key)
+                for (int i = 1; i < originalArray.Length; i++)
                 {
+                    int key = originalArray[i];
+                    int j = i - 1;
+                    while (j >= 0 && originalArray[j] > key)
+                    {
+                        comparisons++;
+                        originalArray[j + 1] = originalArray[j];
+                        j--;
+                    }
                     comparisons++;
-                    array[j + 1] = array[j];
-                    j--;
-                }
-                comparisons++;
-                array[j + 1] = key;
+                    originalArray[j + 1] = key;
 
-                // Обновление прогресса
-                if (i % (array.Length / 10 + 1) == 0 && progressCallback != null)
-                {
-                    progressCallback((double)i / array.Length * 100);
+                    // Обновление прогресса
+                    if (i % (originalArray.Length / 10 + 1) == 0 && progressCallback != null)
+                    {
+                        progressCallback((double)i / originalArray.Length * 100);
+                    }
                 }
             }
 
             watch.Stop();
             progressCallback?.Invoke(100);
-            lock (_locker)
-            {
-                _totalComparisons += comparisons;
-            }
-            InsertionSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
+            _totalComparisons += comparisons;
+            InsertionSortCompleted?.Invoke(originalArray, comparisons, watch.Elapsed.TotalMilliseconds);
         }
 
         // Метод для шейкерной сортировки
         public void ShakerSort(int[] originalArray, Action<double> progressCallback)
         {
-            int[] array = CopyArray(originalArray);
             long comparisons = 0;
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
-            int left = 0;
-            int right = array.Length - 1;
-
-            while (left < right)
+            lock (_locker)
             {
-                // Проход слева направо
-                for (int i = left; i < right; i++)
+                int left = 0;
+                int right = originalArray.Length - 1;
+
+                while (left < right)
                 {
-                    comparisons++;
-                    if (array[i] > array[i + 1])
+                    // Проход слева направо
+                    for (int i = left; i < right; i++)
                     {
-                        int temp = array[i];
-                        array[i] = array[i + 1];
-                        array[i + 1] = temp;
+                        comparisons++;
+                        if (originalArray[i] > originalArray[i + 1])
+                        {
+                            int temp = originalArray[i];
+                            originalArray[i] = originalArray[i + 1];
+                            originalArray[i + 1] = temp;
+                        }
                     }
-                }
 
-                right--;
+                    right--;
 
-                // Проход справа налево
-                for (int i = right; i > left; i--)
-                {
-                    comparisons++;
-                    if (array[i - 1] > array[i])
+                    // Проход справа налево
+                    for (int i = right; i > left; i--)
                     {
-                        int temp = array[i - 1];
-                        array[i - 1] = array[i];
-                        array[i] = temp;
+                        comparisons++;
+                        if (originalArray[i - 1] > originalArray[i])
+                        {
+                            int temp = originalArray[i - 1];
+                            originalArray[i - 1] = originalArray[i];
+                            originalArray[i] = temp;
+                        }
                     }
-                }
 
-                left++;
+                    left++;
 
-                // Обновление прогресса
-                if (left % (array.Length / 10 + 1) == 0 && progressCallback != null)
-                {
-                    progressCallback((double)left / array.Length * 100);
+                    // Обновление прогресса
+                    if (left % (originalArray.Length / 10 + 1) == 0 && progressCallback != null)
+                    {
+                        progressCallback((double)left / originalArray.Length * 100);
+                    }
                 }
             }
 
             watch.Stop();
             progressCallback?.Invoke(100);
-            lock (_locker)
-            {
-                _totalComparisons += comparisons;
-            }
-            ShakerSortCompleted?.Invoke(array, comparisons, watch.Elapsed.TotalMilliseconds);
+            _totalComparisons += comparisons;
+            ShakerSortCompleted?.Invoke(originalArray, comparisons, watch.Elapsed.TotalMilliseconds);
         }
     }
 }
