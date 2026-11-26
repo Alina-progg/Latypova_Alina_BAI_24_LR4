@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Diagnostics;
 
 namespace Latypova_Alina_BAI_24_LR4
 {
@@ -14,10 +15,19 @@ namespace Latypova_Alina_BAI_24_LR4
         private readonly ArraySorter _sorter;
         private readonly SynchronizationContext _uiContext;
         private int[] _originalArray;
+        private SemaphoreSlim _semaphore;
+        private Stopwatch _batchStopwatch = new Stopwatch();
+
+        // Счетчики для отслеживания завершения всех запущенных сортировок
+        private int _expectedSortsToComplete = 0;
+        private int _completedSorts = 0;
 
         // Наблюдаемые свойства
         [ObservableProperty]
         private int _arraySize = 1000;
+
+        [ObservableProperty]
+        private int _threadCount = 4;
 
         [ObservableProperty]
         private string _originalArrayString;
@@ -35,14 +45,24 @@ namespace Latypova_Alina_BAI_24_LR4
         private string _totalComparisons = "Общее число сравнений: 0";
 
         [ObservableProperty]
+        private string _totalElapsedTime = "Общее время выполнения: 0 мс";
+
+        [ObservableProperty]
         private bool _canGenerate = true;
 
         [ObservableProperty]
         private string _shakerSortResult;
 
+        // Свойства для работы ProgressBar
+        [ObservableProperty] private double _bubbleProgress;
+        [ObservableProperty] private double _quickProgress;
+        [ObservableProperty] private double _insertionProgress;
+        [ObservableProperty] private double _shakerProgress;
+
         public MainViewModel()
         {
             _sorter = new ArraySorter();
+            _semaphore = new SemaphoreSlim(ThreadCount);
 
             // Получаем контекст синхронизации текущего потока (UI-потока), 
             // чтобы потом безопасно обновлять интерфейс из фоновых потоков.
@@ -68,6 +88,15 @@ namespace Latypova_Alina_BAI_24_LR4
             BubbleSortResult = QuickSortResult = InsertionSortResult = ShakerSortResult = null;
             TotalComparisons = "Общее число сравнений: 0";
 
+            // Сбрасываем общее время и счётчик завершённых сортировок
+            TotalElapsedTime = "Общее время выполнения: 0 мс";
+            _completedSorts = 0;
+            _expectedSortsToComplete = 0;
+            _batchStopwatch.Reset();
+
+            // Сбрасываем прогресс-бары при генерации нового массива
+            BubbleProgress = QuickProgress = InsertionProgress = ShakerProgress = 0;
+
             // Обновляем состояние команд сортировок
             BubbleSortCommand.NotifyCanExecuteChanged();
             QuickSortCommand.NotifyCanExecuteChanged();
@@ -77,6 +106,19 @@ namespace Latypova_Alina_BAI_24_LR4
 
         private bool CanGenerateArray() => CanGenerate;
 
+        // Изменение количества одновременно выполняемых сортировок
+        partial void OnThreadCountChanged(int value)
+        {
+            _semaphore?.Dispose();
+            _semaphore = new SemaphoreSlim(value);
+        }
+
+        // Вспомогательный метод для обновления прогресс-баров в UI-потоке
+        private void UpdateProgress(Action updateAction)
+        {
+            _uiContext.Post(_ => updateAction(), null);
+        }
+
         // Пузырьковая сортировка
         private bool CanSortBubble() => _originalArray != null && BubbleSortResult != "Сортируется...";
 
@@ -84,11 +126,10 @@ namespace Latypova_Alina_BAI_24_LR4
         private void BubbleSort()
         {
             BubbleSortResult = "Сортируется...";
+            BubbleProgress = 0;
             BubbleSortCommand.NotifyCanExecuteChanged();
 
-            // Создаем новый поток для сортировки
-            Thread thread = new Thread(() => _sorter.BubbleSort(_originalArray));
-            thread.Start();
+            StartSort(() => _sorter.BubbleSort(_originalArray, p => UpdateProgress(() => BubbleProgress = p)));
         }
 
         // Быстрая сортировка
@@ -98,10 +139,10 @@ namespace Latypova_Alina_BAI_24_LR4
         private void QuickSort()
         {
             QuickSortResult = "Сортируется...";
+            QuickProgress = 0;
             QuickSortCommand.NotifyCanExecuteChanged();
 
-            Thread thread = new Thread(() => _sorter.QuickSort(_originalArray));
-            thread.Start();
+            StartSort(() => _sorter.QuickSort(_originalArray, p => UpdateProgress(() => QuickProgress = p)));
         }
 
         // Сортировка вставками
@@ -111,10 +152,23 @@ namespace Latypova_Alina_BAI_24_LR4
         private void InsertionSort()
         {
             InsertionSortResult = "Сортируется...";
+            InsertionProgress = 0;
             InsertionSortCommand.NotifyCanExecuteChanged();
 
-            Thread thread = new Thread(() => _sorter.InsertionSort(_originalArray));
-            thread.Start();
+            StartSort(() => _sorter.InsertionSort(_originalArray, p => UpdateProgress(() => InsertionProgress = p)));
+        }
+
+        // Шейкерная сортировка
+        private bool CanSortShaker() => _originalArray != null && ShakerSortResult != "Сортируется...";
+
+        [RelayCommand(CanExecute = nameof(CanSortShaker))]
+        private void ShakerSort()
+        {
+            ShakerSortResult = "Сортируется...";
+            ShakerProgress = 0;
+            ShakerSortCommand.NotifyCanExecuteChanged();
+
+            StartSort(() => _sorter.ShakerSort(_originalArray, p => UpdateProgress(() => ShakerProgress = p)));
         }
 
         // Обработчики событий (вызываются из фоновых потоков)
@@ -126,6 +180,7 @@ namespace Latypova_Alina_BAI_24_LR4
                 BubbleSortResult = $"Пузырьковая: {FormatArray(sortedArray)}, время: {elapsedMs:F2} мс, сравнений: {comparisons}";
                 UpdateTotalComparisons();
                 BubbleSortCommand.NotifyCanExecuteChanged();
+                CheckBatchCompletion();
             }, null);
         }
 
@@ -136,6 +191,7 @@ namespace Latypova_Alina_BAI_24_LR4
                 QuickSortResult = $"Быстрая: {FormatArray(sortedArray)}, время: {elapsedMs:F2} мс, сравнений: {comparisons}";
                 UpdateTotalComparisons();
                 QuickSortCommand.NotifyCanExecuteChanged();
+                CheckBatchCompletion();
             }, null);
         }
 
@@ -146,6 +202,7 @@ namespace Latypova_Alina_BAI_24_LR4
                 InsertionSortResult = $"Вставками: {FormatArray(sortedArray)}, время: {elapsedMs:F2} мс, сравнений: {comparisons}";
                 UpdateTotalComparisons();
                 InsertionSortCommand.NotifyCanExecuteChanged();
+                CheckBatchCompletion();
             }, null);
         }
 
@@ -156,6 +213,7 @@ namespace Latypova_Alina_BAI_24_LR4
                 ShakerSortResult = $"Шейкерная: {FormatArray(sortedArray)}, время: {elapsedMs:F2} мс, сравнений: {comparisons}";
                 UpdateTotalComparisons();
                 ShakerSortCommand.NotifyCanExecuteChanged();
+                CheckBatchCompletion();
             }, null);
         }
 
@@ -172,19 +230,42 @@ namespace Latypova_Alina_BAI_24_LR4
                 return string.Join(", ", arr.Take(5)) + "...";
         }
 
-
-        // Шейкерная сортировка
-        private bool CanSortShaker() => _originalArray != null && ShakerSortResult != "Сортируется...";
-
-        [RelayCommand(CanExecute = nameof(CanSortShaker))]
-        private void ShakerSort()
+        private void StartSort(Action sortAction)
         {
-            ShakerSortResult = "Сортируется...";
-            ShakerSortCommand.NotifyCanExecuteChanged();
+            // Запускаем таймер, если это первая запущенная сортировка
+            if (!_batchStopwatch.IsRunning)
+            {
+                _batchStopwatch.Start();
+            }
+            // Увеличиваем ожидаемое количество завершений
+            _expectedSortsToComplete++;
 
-            Thread thread = new Thread(() => _sorter.ShakerSort(_originalArray));
+            Thread thread = new Thread(() =>
+            {
+                _semaphore.Wait();
+
+                try
+                {
+                    sortAction();
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            });
+
             thread.Start();
         }
 
+        // Проверка, все ли запущенные потоки завершили работу
+        private void CheckBatchCompletion()
+        {
+            _completedSorts++;
+            if (_completedSorts == _expectedSortsToComplete)
+            {
+                _batchStopwatch.Stop();
+                TotalElapsedTime = $"Общее время выполнения: {_batchStopwatch.Elapsed.TotalMilliseconds:F2} мс";
+            }
+        }
     }
 }
